@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::{ffi::{OsStr, OsString}, path::PathBuf};
-use image::{io::Reader as IR, GenericImage, GenericImageView, Pixel};
-use num_traits::NumCast;
+use image::{io::Reader as IR, GenericImageView, Pixel, RgbImage};
+use num_traits::clamp;
 use rand::prelude::*;
 
 #[derive(Debug, Parser)]
@@ -19,7 +19,7 @@ pub struct Args {
 fn main() {
     let args= Args::parse();
     println!("Making things worse: operations={:?}, files={:?}", args.operations, args.files);
-    let mut images : Vec<image::DynamicImage> = Vec::new();
+    let mut images : Vec<Box<image::RgbImage>> = Vec::new();
     for path in args.files.iter() {
         images.push(load_and_decode_img(&path));
     }
@@ -27,9 +27,9 @@ fn main() {
     for i in 0..images.len() {
         for op in args.operations.iter() {
             match op.as_str() {
-                "test-rgb" => test_rgb(&mut images[i]),
-                "random-noise" => random_noise(&mut images[i]),
-                "random-brightness" => random_brightness(&mut images[i]),
+                "none" => println!("No-op operation"),
+                "random-noise" => random_noise(images[i].as_mut()),
+                "random-brightness" => random_brightness(images[i].as_mut()),
                 _ => panic!("Opeation not supported: op={}", op)
             }
         }
@@ -37,15 +37,15 @@ fn main() {
     }
 }
 
-fn load_and_decode_img(path: &PathBuf) -> image::DynamicImage {
+fn load_and_decode_img(path: &PathBuf) -> Box<image::RgbImage> {
     let img =  IR::open(path).expect("Valid image path");
     println!("Loaded image: img={:?}, format={:?}", path, img.format());
     let decoded_img = img.decode().expect("Supported image format");
     println!("Decoded image: img={:?}, dimensions={:?}", path, decoded_img.dimensions());
-    decoded_img
+    Box::new(decoded_img.to_rgb8().clone())
 }
 
-fn output_modified_img(path: &PathBuf, img: &image::DynamicImage) {
+fn output_modified_img(path: &PathBuf, img: &image::RgbImage) {
     let mut filename: OsString = path.file_stem().unwrap().to_owned();
     filename.push(OsStr::new(".worse."));
     filename.push(path.extension().expect("File must have a valid extension"));
@@ -54,51 +54,26 @@ fn output_modified_img(path: &PathBuf, img: &image::DynamicImage) {
     img.save(out_path).expect("Output file is valid");
 }
 
-fn test_rgb<I: GenericImage>(img: &mut I) {
-    println!("Applying test operation");
-    let (w, h) = img.dimensions();
-    for y in 0..h {
-        for x in 0..w {
-            let px = img.get_pixel(x, y);
-            let rgb = px.channels();
-            let npx = Pixel::from_slice(rgb);
-            img.put_pixel(x, y, *npx);
-        }
+fn random_brightness(img: &mut RgbImage) {
+    println!("Applying random brightness operation");
+    let mut rng = rand::thread_rng(); 
+    for (_x, _y, px) in img.enumerate_pixels_mut() {
+        let modifier = rng.gen_range(0.7 .. 1.3);
+        *px = px.map(|sub| {
+            let res = sub as f32 / modifier;
+            clamp(res as u8, u8::MIN, u8::MAX)
+        });
     }
 }
 
-fn random_noise<I: GenericImage>(img: &mut I) {
-    println!("Applying test operation");
+fn random_noise(img: &mut RgbImage) {
+    println!("Applying random noise operation");
     let mut rng = rand::thread_rng(); 
-    let (w, h) = img.dimensions();
-    for y in 0..h {
-        for x in 0..w {
-            let px = img.get_pixel(x, y);
-            let npx = px.map(|s| {
-                let base: f32 = NumCast::from(s).unwrap();
-                let modifier = rng.gen_range(0.9 .. 1.1);
-                let updated = base / modifier;
-                NumCast::from(updated).or(Some(s)).unwrap()
-            });
-            img.put_pixel(x, y, npx);
-        }
-    }
-}
-
-fn random_brightness<I: GenericImage>(img: &mut I) {
-    println!("Applying test operation");
-    let mut rng = rand::thread_rng(); 
-    let (w, h) = img.dimensions();
-    for y in 0..h {
-        for x in 0..w {
-            let px = img.get_pixel(x, y);
-            let modifier = rng.gen_range(0.9 .. 1.1);
-            let npx = px.map(|s| {
-                let base: f32 = NumCast::from(s).unwrap();
-                let updated = base / modifier;
-                NumCast::from(updated).or(Some(s)).unwrap()
-            });
-            img.put_pixel(x, y, npx);
-        }
+    for (_x, _y, px) in img.enumerate_pixels_mut() {
+        *px = px.map(|sub| {
+            let modifier = rng.gen_range(0.7 .. 1.3);
+            let res = sub as f32 / modifier;
+            clamp(res as u8, u8::MIN, u8::MAX)
+        });
     }
 }
