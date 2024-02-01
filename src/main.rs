@@ -95,8 +95,6 @@ impl ImageStats {
     fn from_image(img: &RgbImage) -> ImageStats {
         let mut stats = ImageStats{
             frequencies: frequencies(img),
-            min: *img.iter().min().unwrap(),
-            max: *img.iter().max().unwrap(),
             entropy: entropy(img),
             ..Default::default()
         };
