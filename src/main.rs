@@ -102,13 +102,17 @@ fn generate_stats(img: &RgbImage) -> ImageStats {
                 stats.min = current;
             }
     }
-    stats.entropy = img.iter().fold(0.0, |acc, count| {
+    stats.entropy = entropy_for_window(&img);
+    stats
+}
+
+fn entropy_for_window(window: &[u8]) -> f32 {
+    window.iter().fold(0.0, |acc, count| {
         if *count == 0 {
             return acc;
         }
 
-        let p: f32 = (*count as f32) / (img.len() as f32);
+        let p: f32 = (*count as f32) / (window.len() as f32);
         acc - p * p.log(2.0)
-    });
-    return stats;
+    })
 }
