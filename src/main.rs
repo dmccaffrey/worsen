@@ -36,7 +36,7 @@ fn main() {
     
 
     for i in 0..images.len() {
-        let stats = generate_stats(images[i].as_ref());
+        let stats = ImageStats::from_image(images[i].as_ref());
         for op in args.operations.iter() {
             match op.as_str() {
                 "none" => println!("No-op operation"),
@@ -91,43 +91,29 @@ fn random_noise(img: &mut RgbImage) {
     }
 }
 
-fn generate_stats(img: &RgbImage) -> ImageStats {
-    println!("Applying frequency as saturation operation");
-    let mut stats = ImageStats{
-        frequencies: Box::new([0u32; 256]),
-        min: u8::MAX,
-        ..Default::default()
-    };
-    for px in img.iter() {
-            stats.frequencies[*px as usize] += 1;
-            if *px > stats.max {
-                stats.max = *px;
-
-            } else if *px < stats.min {
-                stats.min = *px;
-            }
+impl ImageStats {
+    fn from_image(img: &RgbImage) -> ImageStats {
+        let mut stats = ImageStats{
+            frequencies: frequencies(img),
+            min: *img.iter().min().unwrap(),
+            max: *img.iter().max().unwrap(),
+            entropy: entropy(img),
+            ..Default::default()
+        };
+        (stats.least, stats.most) = least_most(&stats.frequencies);
+        stats
     }
-    let mut most = 0;
-    let mut least = u32::MAX;
-    for i in 0..stats.frequencies.len() {
-        let freq = stats.frequencies[i];
-        if freq == 0 {
-            continue;
-        }
-        if freq > most {
-            most = freq;
-            stats.most = i as u8;
-        }
-        if freq < least {
-            least = freq;
-            stats.least = i as u8;
-        }
-    }
-    stats.entropy = entropy_for_window(&img);
-    stats
 }
 
-fn entropy_for_window(window: &[u8]) -> f32 {
+fn frequencies(window: &[u8]) -> Box<[u32]> {
+    let mut freqs = vec![0u32; 256].into_boxed_slice();
+    for val in window.iter() {
+        freqs[*val as usize] += 1;
+    }
+    freqs
+}
+
+fn entropy(window: &[u8]) -> f32 {
     window.iter().fold(0.0, |acc, count| {
         if *count == 0 {
             return acc;
@@ -136,4 +122,25 @@ fn entropy_for_window(window: &[u8]) -> f32 {
         let p: f32 = (*count as f32) / (window.len() as f32);
         acc - p * p.log(2.0)
     })
+}
+
+fn least_most(window: &[u32]) -> (u8, u8) {
+    let mut most_val = 0;
+    let mut least_val = u32::MAX;
+    let mut most_i = 0;
+    let mut least_i = 0;
+    for i in 0..window.len() {
+        if window[i] == 0 {
+            continue;
+        }
+        if window[i] > most_val {
+            most_val = window[i];
+            most_i = i;
+        }
+        if window[i] < least_val {
+            least_val = window[i];
+            least_i = i;
+        }
+    }
+    (least_i as u8, most_i as u8)
 }
