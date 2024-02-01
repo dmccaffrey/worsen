@@ -16,6 +16,14 @@ pub struct Args {
     files: Vec<PathBuf>,
 }
 
+#[derive(Default, Debug)]
+struct ImageStats {
+    frequencies: Box<[u32]>,
+    min: u32,
+    max: u32,
+    entropy: f32
+}
+
 fn main() {
     let args= Args::parse();
     println!("Making things worse: operations={:?}, files={:?}", args.operations, args.files);
@@ -23,13 +31,16 @@ fn main() {
     for path in args.files.iter() {
         images.push(load_and_decode_img(&path));
     }
+    
 
     for i in 0..images.len() {
+        let stats = generate_stats(images[i].as_ref());
         for op in args.operations.iter() {
             match op.as_str() {
                 "none" => println!("No-op operation"),
                 "random-noise" => random_noise(images[i].as_mut()),
                 "random-brightness" => random_brightness(images[i].as_mut()),
+                "stats" => println!("Stats: {:?}", stats),
                 _ => panic!("Opeation not supported: op={}", op)
             }
         }
@@ -42,7 +53,7 @@ fn load_and_decode_img(path: &PathBuf) -> Box<image::RgbImage> {
     println!("Loaded image: img={:?}, format={:?}", path, img.format());
     let decoded_img = img.decode().expect("Supported image format");
     println!("Decoded image: img={:?}, dimensions={:?}", path, decoded_img.dimensions());
-    Box::new(decoded_img.to_rgb8().clone())
+    Box::new(decoded_img.to_rgb8())
 }
 
 fn output_modified_img(path: &PathBuf, img: &image::RgbImage) {
@@ -76,4 +87,28 @@ fn random_noise(img: &mut RgbImage) {
             clamp(res as u8, u8::MIN, u8::MAX)
         });
     }
+}
+
+fn generate_stats(img: &RgbImage) -> ImageStats {
+    println!("Applying frequency as saturation operation");
+    let mut stats = ImageStats{frequencies: Box::new([0u32; 256]), ..Default::default()};
+    for px in img.iter() {
+            stats.frequencies[*px as usize] += 1;
+            let current = stats.frequencies[*px as usize];
+            if current > stats.max {
+                stats.max = current;
+
+            } else if current > stats.min {
+                stats.min = current;
+            }
+    }
+    stats.entropy = img.iter().fold(0.0, |acc, count| {
+        if *count == 0 {
+            return acc;
+        }
+
+        let p: f32 = (*count as f32) / (img.len() as f32);
+        acc - p * p.log(2.0)
+    });
+    return stats;
 }
