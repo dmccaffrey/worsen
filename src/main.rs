@@ -100,7 +100,7 @@ impl ImageStats {
             entropy: entropy(img),
             ..Default::default()
         };
-        (stats.least, stats.most) = least_most(&stats.frequencies);
+        (stats.min, stats.max, stats.least, stats.most) = basic_stats(&stats.frequencies);
         stats
     }
 }
@@ -124,14 +124,21 @@ fn entropy(window: &[u8]) -> f32 {
     })
 }
 
-fn least_most(window: &[u32]) -> (u8, u8) {
+fn basic_stats(window: &[u32]) -> (u8, u8, u8, u8) {
     let mut most_val = 0;
     let mut least_val = u32::MAX;
     let mut most_i = 0;
     let mut least_i = 0;
+    let mut first_nz = None;
+    let mut last_nz = 0;
     for i in 0..window.len() {
         if window[i] == 0 {
             continue;
+
+        }
+        last_nz = i;
+        if first_nz.is_none() {
+            first_nz = Some(i);
         }
         if window[i] > most_val {
             most_val = window[i];
@@ -142,5 +149,5 @@ fn least_most(window: &[u32]) -> (u8, u8) {
             least_i = i;
         }
     }
-    (least_i as u8, most_i as u8)
+    (first_nz.or(Some(0)).unwrap() as u8, last_nz as u8, least_i as u8, most_i as u8)
 }
