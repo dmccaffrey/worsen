@@ -19,8 +19,10 @@ pub struct Args {
 #[derive(Default, Debug)]
 struct ImageStats {
     frequencies: Box<[u32]>,
-    min: u32,
-    max: u32,
+    min: u8,
+    max: u8,
+    most: u8,
+    least: u8,
     entropy: f32
 }
 
@@ -91,16 +93,35 @@ fn random_noise(img: &mut RgbImage) {
 
 fn generate_stats(img: &RgbImage) -> ImageStats {
     println!("Applying frequency as saturation operation");
-    let mut stats = ImageStats{frequencies: Box::new([0u32; 256]), ..Default::default()};
+    let mut stats = ImageStats{
+        frequencies: Box::new([0u32; 256]),
+        min: u8::MAX,
+        ..Default::default()
+    };
     for px in img.iter() {
             stats.frequencies[*px as usize] += 1;
-            let current = stats.frequencies[*px as usize];
-            if current > stats.max {
-                stats.max = current;
+            if *px > stats.max {
+                stats.max = *px;
 
-            } else if current > stats.min {
-                stats.min = current;
+            } else if *px < stats.min {
+                stats.min = *px;
             }
+    }
+    let mut most = 0;
+    let mut least = u32::MAX;
+    for i in 0..stats.frequencies.len() {
+        let freq = stats.frequencies[i];
+        if freq == 0 {
+            continue;
+        }
+        if freq > most {
+            most = freq;
+            stats.most = i as u8;
+        }
+        if freq < least {
+            least = freq;
+            stats.least = i as u8;
+        }
     }
     stats.entropy = entropy_for_window(&img);
     stats
